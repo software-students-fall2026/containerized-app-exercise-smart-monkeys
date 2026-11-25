@@ -13,6 +13,7 @@ from pymongo.errors import PyMongoError
 app = Flask(__name__)
 
 MAX_IMAGE_SIZE = 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = MAX_IMAGE_SIZE + 64 * 1024
 
 MONGO_URI = os.getenv(
     "MONGO_URI", "mongodb://db:27017/monkeymoves"
@@ -43,6 +44,11 @@ def store_round(document):
     """Insert a pending round into MongoDB."""
     database = mongo_client.get_default_database()
     database["rounds"].insert_one(document)
+
+@app.errorhandler(413)
+def request_too_large(_error):
+    """Return a JSON response for oversized requests."""
+    return jsonify({"error": "Request exceeds upload limit"}), 413
 
 
 @app.route("/health", methods=["GET"])

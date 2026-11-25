@@ -205,3 +205,20 @@ def test_submit_round_database_failure():
         }
 
         mock_store.assert_called_once()
+def test_submit_round_oversized_request():
+    """Reject requests exceeding the HTTP upload limit."""
+    image = BytesIO(
+        b"x" * (app.config["MAX_CONTENT_LENGTH"] + 1)
+    )
+
+    with app.test_client() as client:
+        response = client.post(
+            "/api/rounds",
+            data={"image": (image, "large.jpg")},
+            content_type="multipart/form-data",
+        )
+
+        assert response.status_code == 413
+        assert response.get_json() == {
+            "error": "Request exceeds upload limit"
+        }
