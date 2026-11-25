@@ -1,12 +1,16 @@
 """Flask backend for the MonkeyMoves application."""
 
 import os
+from io import BytesIO
 
 from flask import Flask, jsonify, request
+from PIL import Image, UnidentifiedImageError
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 
 app = Flask(__name__)
+
+MAX_IMAGE_SIZE = 1024 * 1024
 
 MONGO_URI = os.getenv(
     "MONGO_URI", "mongodb://db:27017/monkeymoves"
@@ -29,11 +33,30 @@ def health():
 
 @app.route("/api/rounds", methods=["POST"])
 def submit_round():
-    """Receive a webcam image for a new game round."""
+    """Receive and validate a webcam image."""
     image = request.files.get("image")
 
     if image is None or not image.filename:
         return jsonify({"error": "Image is required"}), 400
+
+    image_data = image.read(MAX_IMAGE_SIZE + 1)
+
+    if len(image_data) > MAX_IMAGE_SIZE:
+        return jsonify({"error": "Image exceeds 1 MiB limit"}), 413
+
+    if image.mimetype != "image/jpeg":
+        return jsonify({"error": "Only JPEG images are accepted"}), 400
+
+    try:
+        with Image.open(BytesIO(image_data)) as uploaded_image:
+            if uploaded_image.format != "JPEG":
+                return jsonify({"error": "Invalid JPEG image"}), 400
+
+            uploaded_image.load()
+
+    except (UnidentifiedImageError, OSError, ValueError,
+            Image.DecompressionBombError):
+        return jsonify({"error": "Invalid JPEG image"}), 400
 
     return jsonify({"error": "Submission not yet implemented"}), 501
 
