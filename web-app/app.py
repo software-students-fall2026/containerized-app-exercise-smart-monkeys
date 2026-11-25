@@ -2,7 +2,7 @@
 
 import os
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 
@@ -25,6 +25,17 @@ def health():
         return jsonify({"status": "ok"}), 200
     except PyMongoError:
         return jsonify({"status": "unavailable"}), 503
+
+
+@app.route("/api/rounds", methods=["POST"])
+def submit_round():
+    """Receive a webcam image for a new game round."""
+    image = request.files.get("image")
+
+    if image is None or not image.filename:
+        return jsonify({"error": "Image is required"}), 400
+
+    return jsonify({"error": "Submission not yet implemented"}), 501
 
 
 if __name__ == "__main__":
