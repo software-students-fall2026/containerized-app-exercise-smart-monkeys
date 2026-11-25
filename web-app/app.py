@@ -39,6 +39,12 @@ def create_round_document(image_data):
     }
 
 
+def store_round(document):
+    """Insert a pending round into MongoDB."""
+    database = mongo_client.get_default_database()
+    database["rounds"].insert_one(document)
+
+
 @app.route("/health", methods=["GET"])
 def health():
     """Check application and database readiness."""
@@ -51,7 +57,7 @@ def health():
 
 @app.route("/api/rounds", methods=["POST"])
 def submit_round():
-    """Receive and validate a webcam image."""
+    """Receive, validate, and store a webcam image."""
     image = request.files.get("image")
 
     if image is None or not image.filename:
@@ -80,7 +86,17 @@ def submit_round():
     ):
         return jsonify({"error": "Invalid JPEG image"}), 400
 
-    return jsonify({"error": "Submission not yet implemented"}), 501
+    document = create_round_document(image_data)
+
+    try:
+        store_round(document)
+    except PyMongoError:
+        return jsonify({"error": "Database unavailable"}), 503
+
+    return jsonify({
+        "id": document["_id"],
+        "status": document["status"],
+    }), 202
 
 
 if __name__ == "__main__":
