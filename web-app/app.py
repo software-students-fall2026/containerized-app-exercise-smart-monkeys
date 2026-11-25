@@ -13,15 +13,12 @@ from pymongo.errors import PyMongoError
 app = Flask(__name__)
 
 MAX_IMAGE_SIZE = 1024 * 1024
+
 app.config["MAX_CONTENT_LENGTH"] = MAX_IMAGE_SIZE + 64 * 1024
 
-MONGO_URI = os.getenv(
-    "MONGO_URI", "mongodb://db:27017/monkeymoves"
-)
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://db:27017/monkeymoves")
 
-mongo_client = MongoClient(
-    MONGO_URI, serverSelectionTimeoutMS=2000
-)
+mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
 
 
 def create_round_document(image_data):
@@ -44,6 +41,26 @@ def store_round(document):
     """Insert a pending round into MongoDB."""
     database = mongo_client.get_default_database()
     database["rounds"].insert_one(document)
+
+
+def is_valid_jpeg(image_data):
+    """Verify that image data contains a valid JPEG image."""
+    try:
+        with Image.open(BytesIO(image_data)) as uploaded_image:
+            if uploaded_image.format != "JPEG":
+                return False
+
+            uploaded_image.load()
+            return True
+
+    except (
+        UnidentifiedImageError,
+        OSError,
+        ValueError,
+        Image.DecompressionBombError,
+    ):
+        return False
+
 
 @app.errorhandler(413)
 def request_too_large(_error):
@@ -77,19 +94,7 @@ def submit_round():
     if image.mimetype != "image/jpeg":
         return jsonify({"error": "Only JPEG images are accepted"}), 400
 
-    try:
-        with Image.open(BytesIO(image_data)) as uploaded_image:
-            if uploaded_image.format != "JPEG":
-                return jsonify({"error": "Invalid JPEG image"}), 400
-
-            uploaded_image.load()
-
-    except (
-        UnidentifiedImageError,
-        OSError,
-        ValueError,
-        Image.DecompressionBombError,
-    ):
+    if not is_valid_jpeg(image_data):
         return jsonify({"error": "Invalid JPEG image"}), 400
 
     document = create_round_document(image_data)
@@ -99,10 +104,7 @@ def submit_round():
     except PyMongoError:
         return jsonify({"error": "Database unavailable"}), 503
 
-    return jsonify({
-        "id": document["_id"],
-        "status": document["status"],
-    }), 202
+    return jsonify({"id": document["_id"], "status": document["status"]}), 202
 
 
 if __name__ == "__main__":

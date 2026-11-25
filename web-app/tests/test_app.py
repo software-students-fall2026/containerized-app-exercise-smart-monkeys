@@ -72,9 +72,7 @@ def test_submit_round_non_jpeg():
         )
 
         assert response.status_code == 400
-        assert response.get_json() == {
-            "error": "Only JPEG images are accepted"
-        }
+        assert response.get_json() == {"error": "Only JPEG images are accepted"}
 
 
 def test_submit_round_corrupted_jpeg():
@@ -82,16 +80,12 @@ def test_submit_round_corrupted_jpeg():
     with app.test_client() as client:
         response = client.post(
             "/api/rounds",
-            data={
-                "image": (BytesIO(b"not a real image"), "photo.jpg")
-            },
+            data={"image": (BytesIO(b"not a real image"), "photo.jpg")},
             content_type="multipart/form-data",
         )
 
         assert response.status_code == 400
-        assert response.get_json() == {
-            "error": "Invalid JPEG image"
-        }
+        assert response.get_json() == {"error": "Invalid JPEG image"}
 
 
 def test_submit_round_oversized_image():
@@ -106,9 +100,7 @@ def test_submit_round_oversized_image():
         )
 
         assert response.status_code == 413
-        assert response.get_json() == {
-            "error": "Image exceeds 1 MiB limit"
-        }
+        assert response.get_json() == {"error": "Image exceeds 1 MiB limit"}
 
 
 def test_submit_round_valid_jpeg():
@@ -200,16 +192,14 @@ def test_submit_round_database_failure():
             )
 
         assert response.status_code == 503
-        assert response.get_json() == {
-            "error": "Database unavailable"
-        }
+        assert response.get_json() == {"error": "Database unavailable"}
 
         mock_store.assert_called_once()
+
+
 def test_submit_round_oversized_request():
     """Reject requests exceeding the HTTP upload limit."""
-    image = BytesIO(
-        b"x" * (app.config["MAX_CONTENT_LENGTH"] + 1)
-    )
+    image = BytesIO(b"x" * (app.config["MAX_CONTENT_LENGTH"] + 1))
 
     with app.test_client() as client:
         response = client.post(
@@ -219,6 +209,4 @@ def test_submit_round_oversized_request():
         )
 
         assert response.status_code == 413
-        assert response.get_json() == {
-            "error": "Request exceeds upload limit"
-        }
+        assert response.get_json() == {"error": "Request exceeds upload limit"}
