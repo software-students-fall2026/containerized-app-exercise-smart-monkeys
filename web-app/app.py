@@ -1,7 +1,9 @@
 """Flask backend for the MonkeyMoves application."""
 
 import os
+from datetime import datetime, timezone
 from io import BytesIO
+from uuid import uuid4
 
 from flask import Flask, jsonify, request
 from PIL import Image, UnidentifiedImageError
@@ -19,6 +21,22 @@ MONGO_URI = os.getenv(
 mongo_client = MongoClient(
     MONGO_URI, serverSelectionTimeoutMS=2000
 )
+
+
+def create_round_document(image_data):
+    """Construct a pending round document."""
+    return {
+        "_id": str(uuid4()),
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc),
+        "image": image_data,
+        "player_move": None,
+        "computer_move": None,
+        "confidence": None,
+        "outcome": None,
+        "error": None,
+        "finished_at": None,
+    }
 
 
 @app.route("/health", methods=["GET"])
@@ -54,8 +72,12 @@ def submit_round():
 
             uploaded_image.load()
 
-    except (UnidentifiedImageError, OSError, ValueError,
-            Image.DecompressionBombError):
+    except (
+        UnidentifiedImageError,
+        OSError,
+        ValueError,
+        Image.DecompressionBombError,
+    ):
         return jsonify({"error": "Invalid JPEG image"}), 400
 
     return jsonify({"error": "Submission not yet implemented"}), 501

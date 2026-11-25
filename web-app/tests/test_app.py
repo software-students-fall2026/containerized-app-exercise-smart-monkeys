@@ -1,12 +1,14 @@
 """Unit tests for the MonkeyMoves Flask application."""
 
+from datetime import timezone
 from io import BytesIO
 from unittest.mock import patch
+from uuid import UUID
 
 from PIL import Image
 from pymongo.errors import ConnectionFailure
 
-from app import app, MAX_IMAGE_SIZE
+from app import app, MAX_IMAGE_SIZE, create_round_document
 
 
 def test_health_success():
@@ -126,3 +128,29 @@ def test_submit_round_valid_jpeg():
         assert response.get_json() == {
             "error": "Submission not yet implemented"
         }
+
+
+def test_create_round_document():
+    """Verify the initial pending round document."""
+    image_data = b"sample image data"
+    document = create_round_document(image_data)
+
+    assert document["status"] == "pending"
+    assert document["image"] == image_data
+    assert document["created_at"].tzinfo == timezone.utc
+    assert str(UUID(document["_id"])) == document["_id"]
+
+    assert document["player_move"] is None
+    assert document["computer_move"] is None
+    assert document["confidence"] is None
+    assert document["outcome"] is None
+    assert document["error"] is None
+    assert document["finished_at"] is None
+
+
+def test_create_round_unique_ids():
+    """Verify that every round receives a unique ID."""
+    first_round = create_round_document(b"image one")
+    second_round = create_round_document(b"image two")
+
+    assert first_round["_id"] != second_round["_id"]
