@@ -1,36 +1,40 @@
 name: lint-free
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   lint-and-format:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        # repeat same job for each subsystem in the following subdirectories
         subdir: [web-app, machine-learning-client]
+    defaults:
+      run:
+        working-directory: ${{ matrix.subdir }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.10" # update version(s) as needed
-      - name: Install dependencies
+          python-version: "3.12"
+      - name: Report empty subsystem
+        if: ${{ hashFiles(format('{0}/**/*.py', matrix.subdir)) == '' }}
+        run: echo "No Python files yet; lint checks will run when code is added."
+      - name: Install subsystem dependencies
         if: ${{ hashFiles(format('{0}/**/*.py', matrix.subdir)) != '' }}
         run: |
-          cd ${{ matrix.subdir }}
-          python -m pip install --upgrade pip
-          python -m pip install pipenv
-          pipenv sync --dev --python $(which python)
-          pipenv shell --fancy --python $(which python)
+          if [ ! -f requirements.txt ]; then
+            echo "::error::This subsystem has Python code but no requirements.txt."
+            exit 1
+          fi
+          python -m pip install -r requirements.txt
+          python -m pip check
       - name: Lint with pylint
         if: ${{ hashFiles(format('{0}/**/*.py', matrix.subdir)) != '' }}
-        # you may set pylint to ignore any files or dependencies that make no sense to lint
-        run: |
-          cd ${{ matrix.subdir }}
-          pipenv run pylint **/*.py
+        run: git ls-files -z -- '*.py' | xargs -0 python -m pylint
       - name: Format with black
         if: ${{ hashFiles(format('{0}/**/*.py', matrix.subdir)) != '' }}
-        # you may set black to ignore any files or dependencies that make no sense to format
-        run: |
-          cd ${{ matrix.subdir }}
-          pipenv run black --diff --check .
+        run: python -m black --diff --check .
