@@ -1,0 +1,65 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>MonkeyMoves | Rock Paper Scissors</title>
+
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/camera.js" defer></script>
+</head>
+
+<body>
+    <main>
+        <header>
+            <h1>🐒 MonkeyMoves</h1>
+            <p>Play Rock, Paper, Scissors using your webcam!</p>
+        </header>
+
+        <section class="camera-section">
+            <h2>Your Camera</h2>
+
+            <p id="camera-status" role="status">
+                Camera is not started.
+            </p>
+
+            <video
+                id="webcam"
+                autoplay
+                playsinline
+                muted
+                aria-label="Live webcam preview">
+            </video>
+
+            <div class="camera-controls">
+                <button id="start-camera" type="button">
+                    Start Camera
+                </button>
+
+                <button id="capture-btn" type="button" disabled>
+                    Capture Gesture
+                </button>
+
+                <button id="submit-gesture" type="button" disabled>
+                    Submit Gesture
+                </button>
+
+                <button id="stop-camera" type="button" disabled>
+                    Stop Camera
+                </button>
+            </div>
+
+            <h3>Captured Image</h3>
+
+            <img
+                id="captured-image"
+                alt="Your captured hand gesture"
+                hidden>
+
+            <canvas id="capture-canvas" hidden></canvas>
+        </section>
+    </main>
+</body>
+</html>
