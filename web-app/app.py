@@ -1,46 +1,19 @@
 """Flask backend for the MonkeyMoves application."""
 
 import os
-from datetime import datetime, timezone
 from io import BytesIO
-from uuid import uuid4
 
 from flask import Flask, jsonify, request
 from PIL import Image, UnidentifiedImageError
-from pymongo import MongoClient
 from pymongo.errors import PyMongoError
+
+from web_db import check_connection, create_round_document, store_round
 
 app = Flask(__name__)
 
 MAX_IMAGE_SIZE = 1024 * 1024
 
 app.config["MAX_CONTENT_LENGTH"] = MAX_IMAGE_SIZE + 64 * 1024
-
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://db:27017/monkeymoves")
-
-mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
-
-
-def create_round_document(image_data):
-    """Construct a pending round document."""
-    return {
-        "_id": str(uuid4()),
-        "status": "pending",
-        "created_at": datetime.now(timezone.utc),
-        "image": image_data,
-        "player_move": None,
-        "computer_move": None,
-        "confidence": None,
-        "outcome": None,
-        "error": None,
-        "finished_at": None,
-    }
-
-
-def store_round(document):
-    """Insert a pending round into MongoDB."""
-    database = mongo_client.get_default_database()
-    database["rounds"].insert_one(document)
 
 
 def is_valid_jpeg(image_data):
@@ -71,11 +44,10 @@ def request_too_large(_error):
 @app.route("/health", methods=["GET"])
 def health():
     """Check application and database readiness."""
-    try:
-        mongo_client.admin.command("ping")
+    if check_connection():
         return jsonify({"status": "ok"}), 200
-    except PyMongoError:
-        return jsonify({"status": "unavailable"}), 503
+
+    return jsonify({"status": "unavailable"}), 503
 
 
 @app.route("/api/rounds", methods=["POST"])

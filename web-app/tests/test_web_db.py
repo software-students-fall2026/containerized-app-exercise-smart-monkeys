@@ -1,10 +1,17 @@
 """Unit tests for web application database operations."""
 
+from datetime import timezone
 from unittest.mock import patch
+from uuid import UUID
 
 from pymongo.errors import ConnectionFailure
 
-from web_db import check_connection, get_collection
+from web_db import (
+    check_connection,
+    get_collection,
+    create_round_document,
+    store_round,
+)
 
 
 def test_check_connection_success():
@@ -35,3 +42,44 @@ def test_get_collection():
 
         mock_client.get_default_database.assert_called_once_with()
         database.__getitem__.assert_called_once_with("rounds")
+
+
+def test_create_round_document():
+    """Verify the initial pending round document."""
+    image_data = b"sample image data"
+    document = create_round_document(image_data)
+
+    assert document["status"] == "pending"
+    assert document["image"] == image_data
+    assert document["created_at"].tzinfo == timezone.utc
+    assert str(UUID(document["_id"])) == document["_id"]
+
+    assert document["player_move"] is None
+    assert document["computer_move"] is None
+    assert document["confidence"] is None
+    assert document["outcome"] is None
+    assert document["error"] is None
+    assert document["finished_at"] is None
+
+
+def test_create_round_unique_ids():
+    """Verify that every round receives a unique ID."""
+    first_round = create_round_document(b"image one")
+    second_round = create_round_document(b"image two")
+
+    assert first_round["_id"] != second_round["_id"]
+
+
+def test_store_round():
+    """Verify that a round is inserted into MongoDB."""
+    document = create_round_document(b"sample image")
+
+    with patch("web_db.mongo_client") as mock_client:
+        database = mock_client.get_default_database.return_value
+        collection = database.__getitem__.return_value
+
+        store_round(document)
+
+        mock_client.get_default_database.assert_called_once_with()
+        database.__getitem__.assert_called_once_with("rounds")
+        collection.insert_one.assert_called_once_with(document)
