@@ -7,18 +7,19 @@ from pymongo.errors import PyMongoError
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/monkeymoves")
 
+mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
 
-client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
 
-db = client["monkeymoves"]
-
-rounds = db["rounds"]
+def get_collection():
+    """Return the MongoDB rounds collection."""
+    database = mongo_client.get_default_database()
+    return database["rounds"]
 
 
 def check_connection():
     """Check whether MongoDB is reachable."""
     try:
-        client.admin.command("ping")
+        mongo_client.admin.command("ping")
         return True
     except PyMongoError:
         return False
