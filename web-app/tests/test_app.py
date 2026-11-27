@@ -1,5 +1,6 @@
 """Unit tests for the MonkeyMoves Flask application."""
 
+from datetime import datetime, timezone
 from io import BytesIO
 from unittest.mock import patch
 from uuid import UUID
@@ -170,3 +171,109 @@ def test_submit_round_oversized_request():
 
         assert response.status_code == 413
         assert response.get_json() == {"error": "Request exceeds upload limit"}
+
+
+def test_retrieve_round_completed():
+    """Verify retrieval of a completed round."""
+    timestamp = datetime(2026, 11, 27, 12, 0, tzinfo=timezone.utc)
+
+    document = {
+        "_id": "round-123",
+        "status": "completed",
+        "player_move": "rock",
+        "computer_move": "scissors",
+        "confidence": 0.98,
+        "outcome": "win",
+        "error": None,
+        "created_at": timestamp,
+        "finished_at": timestamp,
+    }
+
+    with patch("app.get_round", return_value=document) as mock_get:
+        with app.test_client() as client:
+            response = client.get("/api/rounds/round-123")
+
+        assert response.status_code == 200
+        assert response.get_json() == {
+            "id": "round-123",
+            "status": "completed",
+            "player_move": "rock",
+            "computer_move": "scissors",
+            "confidence": 0.98,
+            "outcome": "win",
+            "error": None,
+            "created_at": "2026-11-27T12:00:00+00:00",
+            "finished_at": "2026-11-27T12:00:00+00:00",
+        }
+
+        mock_get.assert_called_once_with("round-123")
+
+
+def test_retrieve_round_pending():
+    """Verify retrieval of a pending round."""
+    document = {
+        "_id": "round-456",
+        "status": "pending",
+        "created_at": datetime(2026, 11, 27, 12, 0),
+    }
+
+    with patch("app.get_round", return_value=document):
+        with app.test_client() as client:
+            response = client.get("/api/rounds/round-456")
+
+        assert response.status_code == 200
+
+        result = response.get_json()
+
+        assert result["id"] == "round-456"
+        assert result["status"] == "pending"
+        assert result["player_move"] is None
+        assert result["computer_move"] is None
+        assert result["confidence"] is None
+        assert result["outcome"] is None
+        assert result["error"] is None
+        assert result["finished_at"] is None
+        assert result["created_at"] == "2026-11-27T12:00:00+00:00"
+
+
+def test_retrieve_round_excludes_image():
+    """Ensure binary image data is never exposed."""
+    document = {
+        "_id": "round-789",
+        "status": "pending",
+        "image": b"private image data",
+    }
+
+    with patch("app.get_round", return_value=document):
+        with app.test_client() as client:
+            response = client.get("/api/rounds/round-789")
+
+        assert response.status_code == 200
+        assert "image" not in response.get_json()
+        assert "_id" not in response.get_json()
+
+
+def test_retrieve_round_not_found():
+    """Return 404 when the requested round does not exist."""
+    with patch("app.get_round", return_value=None) as mock_get:
+        with app.test_client() as client:
+            response = client.get("/api/rounds/nonexistent-id")
+
+        assert response.status_code == 404
+        assert response.get_json() == {"error": "Round not found"}
+
+        mock_get.assert_called_once_with("nonexistent-id")
+
+
+def test_retrieve_round_database_failure():
+    """Return 503 when round retrieval fails."""
+    with patch("app.get_round") as mock_get:
+        mock_get.side_effect = ConnectionFailure()
+
+        with app.test_client() as client:
+            response = client.get("/api/rounds/round-123")
+
+        assert response.status_code == 503
+        assert response.get_json() == {"error": "Database unavailable"}
+
+        mock_get.assert_called_once_with("round-123")

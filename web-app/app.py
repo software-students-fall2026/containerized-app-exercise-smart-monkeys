@@ -1,13 +1,19 @@
 """Flask backend for the MonkeyMoves application."""
 
 import os
+from datetime import timezone
 from io import BytesIO
 
 from flask import Flask, jsonify, request
 from PIL import Image, UnidentifiedImageError
 from pymongo.errors import PyMongoError
 
-from web_db import check_connection, create_round_document, store_round
+from web_db import (
+    check_connection,
+    create_round_document,
+    get_round,
+    store_round,
+)
 
 app = Flask(__name__)
 
@@ -33,6 +39,32 @@ def is_valid_jpeg(image_data):
         Image.DecompressionBombError,
     ):
         return False
+
+
+def serialize_timestamp(timestamp):
+    """Convert a MongoDB timestamp to an ISO 8601 UTC string."""
+    if timestamp is None:
+        return None
+
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+
+    return timestamp.astimezone(timezone.utc).isoformat()
+
+
+def serialize_round(document):
+    """Convert a round document into a public API response."""
+    return {
+        "id": str(document["_id"]),
+        "status": document["status"],
+        "player_move": document.get("player_move"),
+        "computer_move": document.get("computer_move"),
+        "confidence": document.get("confidence"),
+        "outcome": document.get("outcome"),
+        "error": document.get("error"),
+        "created_at": serialize_timestamp(document.get("created_at")),
+        "finished_at": serialize_timestamp(document.get("finished_at")),
+    }
 
 
 @app.errorhandler(413)
@@ -77,6 +109,20 @@ def submit_round():
         return jsonify({"error": "Database unavailable"}), 503
 
     return jsonify({"id": document["_id"], "status": document["status"]}), 202
+
+
+@app.route("/api/rounds/<round_id>", methods=["GET"])
+def retrieve_round(round_id):
+    """Retrieve the status and results of an individual round."""
+    try:
+        document = get_round(round_id)
+    except PyMongoError:
+        return jsonify({"error": "Database unavailable"}), 503
+
+    if document is None:
+        return jsonify({"error": "Round not found"}), 404
+
+    return jsonify(serialize_round(document)), 200
 
 
 if __name__ == "__main__":
