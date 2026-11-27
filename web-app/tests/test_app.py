@@ -1,6 +1,5 @@
 """Unit tests for the MonkeyMoves Flask application."""
 
-from datetime import timezone
 from io import BytesIO
 from unittest.mock import patch
 from uuid import UUID
@@ -8,13 +7,13 @@ from uuid import UUID
 from PIL import Image
 from pymongo.errors import ConnectionFailure
 
-from app import app, MAX_IMAGE_SIZE, create_round_document, store_round
+from app import app, MAX_IMAGE_SIZE
 
 
 def test_health_success():
     """Verify health response when MongoDB is available."""
-    with patch("app.mongo_client") as mock_client:
-        mock_client.admin.command.return_value = {"ok": 1}
+    with patch("app.check_connection") as mock_check:
+        mock_check.return_value = True
 
         with app.test_client() as client:
             response = client.get("/health")
@@ -22,19 +21,21 @@ def test_health_success():
             assert response.status_code == 200
             assert response.get_json() == {"status": "ok"}
 
-        mock_client.admin.command.assert_called_once_with("ping")
+        mock_check.assert_called_once_with()
 
 
 def test_health_database_unavailable():
     """Verify health response when MongoDB is unavailable."""
-    with patch("app.mongo_client") as mock_client:
-        mock_client.admin.command.side_effect = ConnectionFailure()
+    with patch("app.check_connection") as mock_check:
+        mock_check.return_value = False
 
         with app.test_client() as client:
             response = client.get("/health")
 
             assert response.status_code == 503
             assert response.get_json() == {"status": "unavailable"}
+
+        mock_check.assert_called_once_with()
 
 
 def test_submit_round_missing_image():
@@ -132,47 +133,6 @@ def test_submit_round_valid_jpeg():
         assert document["_id"] == result["id"]
         assert document["status"] == "pending"
         assert document["image"] == image_data
-
-
-def test_create_round_document():
-    """Verify the initial pending round document."""
-    image_data = b"sample image data"
-    document = create_round_document(image_data)
-
-    assert document["status"] == "pending"
-    assert document["image"] == image_data
-    assert document["created_at"].tzinfo == timezone.utc
-    assert str(UUID(document["_id"])) == document["_id"]
-
-    assert document["player_move"] is None
-    assert document["computer_move"] is None
-    assert document["confidence"] is None
-    assert document["outcome"] is None
-    assert document["error"] is None
-    assert document["finished_at"] is None
-
-
-def test_create_round_unique_ids():
-    """Verify that every round receives a unique ID."""
-    first_round = create_round_document(b"image one")
-    second_round = create_round_document(b"image two")
-
-    assert first_round["_id"] != second_round["_id"]
-
-
-def test_store_round():
-    """Verify that a round is inserted into MongoDB."""
-    document = create_round_document(b"sample image")
-
-    with patch("app.mongo_client") as mock_client:
-        database = mock_client.get_default_database.return_value
-        collection = database.__getitem__.return_value
-
-        store_round(document)
-
-        mock_client.get_default_database.assert_called_once_with()
-        database.__getitem__.assert_called_once_with("rounds")
-        collection.insert_one.assert_called_once_with(document)
 
 
 def test_submit_round_database_failure():
