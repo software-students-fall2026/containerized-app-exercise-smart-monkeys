@@ -1,0 +1,72 @@
+name: Web build and test
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MONGO_URI: mongodb://db:27017/monkeymoves_web_ci
+      BASE_URL: http://web-app:5000
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build Flask image
+        run: docker build --pull -t monkeymoves-web:ci ./web-app
+      - name: Run web unit tests and enforce coverage
+        run: |
+          docker run --rm -e COVERAGE_FILE=/tmp/.coverage monkeymoves-web:ci \
+            python -m pytest -p no:cacheprovider --cov=. \
+            --cov-report=term-missing --cov-fail-under=80
+      - name: Check integration script style
+        run: |
+          docker run --rm -v "$PWD/integration:/checks:ro" monkeymoves-web:ci \
+            python -m black --check /checks/web_smoke_test.py
+          docker run --rm -v "$PWD/integration:/checks:ro" monkeymoves-web:ci \
+            python -m pylint --persistent=n /checks/web_smoke_test.py
+      - name: Start isolated database and Flask
+        run: |
+          docker network create monkeymoves-web-ci
+          docker run -d --name db --network monkeymoves-web-ci mongo:8.0.16
+          docker run -d --name web-app --network monkeymoves-web-ci \
+            -e MONGO_URI --health-interval=2s --health-start-period=30s \
+            monkeymoves-web:ci
+          for attempt in {1..60}; do
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' web-app)" = healthy ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Flask did not become healthy within 120 seconds."
+          exit 1
+      - name: Verify non-root runtime and live JPEG storage
+        run: |
+          docker exec web-app python -c "import os; assert os.getuid() == 10001"
+          docker run --rm --network monkeymoves-web-ci -e MONGO_URI -e BASE_URL \
+            -v "$PWD/integration:/checks:ro" monkeymoves-web:ci \
+            python /checks/web_smoke_test.py
+      - name: Verify health reports database outage
+        run: |
+          docker stop db
+          docker run --rm --network monkeymoves-web-ci -e BASE_URL \
+            -v "$PWD/integration:/checks:ro" monkeymoves-web:ci \
+            python /checks/web_smoke_test.py --expect-unavailable
+      - name: Show container diagnostics
+        if: failure()
+        run: |
+          docker logs web-app || true
+          docker logs db || true
+          docker inspect web-app || true
+      - name: Remove test containers and network
+        if: always()
+        run: |
+          docker rm -fv web-app db || true
+          docker network rm monkeymoves-web-ci || true
