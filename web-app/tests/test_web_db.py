@@ -258,3 +258,13 @@ def test_get_round_database_failure():
 
         with pytest.raises(ConnectionFailure):
             get_round("round-123")
+
+
+@pytest.mark.parametrize("limit", [0, -1, -20, 2.5, "20", None, True])
+def test_list_rounds_invalid_limit(limit):
+    """Verify that invalid history limits are rejected."""
+    with patch("web_db.get_collection") as mock_get_collection:
+        with pytest.raises(ValueError):
+            list_rounds(limit)
+
+        mock_get_collection.assert_not_called()

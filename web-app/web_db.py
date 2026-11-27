@@ -50,6 +50,9 @@ def store_round(document):
 
 def list_rounds(limit=20):
     """Retrieve recent game rounds without image data."""
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+        raise ValueError("Limit must be a positive integer")
+
     return list(
         get_collection().find({}, {"image": 0}).sort("created_at", -1).limit(limit)
     )
