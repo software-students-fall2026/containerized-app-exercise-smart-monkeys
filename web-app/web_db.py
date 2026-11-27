@@ -46,3 +46,11 @@ def create_round_document(image_data):
 def store_round(document):
     """Insert a pending round into MongoDB."""
     get_collection().insert_one(document)
+
+
+def get_round(round_id):
+    """Retrieve an individual round without its image data."""
+    return get_collection().find_one(
+        {"_id": round_id},
+        {"image": 0},
+    )
