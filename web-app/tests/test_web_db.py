@@ -4,6 +4,8 @@ from datetime import timezone
 from unittest.mock import patch
 from uuid import UUID
 
+import pytest
+
 from pymongo.errors import ConnectionFailure
 
 from web_db import (
@@ -11,6 +13,7 @@ from web_db import (
     get_collection,
     create_round_document,
     store_round,
+    list_rounds,
 )
 
 
@@ -83,3 +86,53 @@ def test_store_round():
         mock_client.get_default_database.assert_called_once_with()
         database.__getitem__.assert_called_once_with("rounds")
         collection.insert_one.assert_called_once_with(document)
+
+
+def test_list_rounds_success():
+    """Verify retrieval of recent rounds."""
+    documents = [
+        {"_id": "round-2", "status": "completed"},
+        {"_id": "round-1", "status": "pending"},
+    ]
+
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        cursor = collection.find.return_value
+        sorted_cursor = cursor.sort.return_value
+        sorted_cursor.limit.return_value = documents
+
+        assert list_rounds() == documents
+
+        collection.find.assert_called_once_with({}, {"image": 0})
+        cursor.sort.assert_called_once_with("created_at", -1)
+        sorted_cursor.limit.assert_called_once_with(20)
+
+
+def test_list_rounds_empty():
+    """Verify retrieval when no rounds exist."""
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.find.return_value.sort.return_value.limit.return_value = []
+
+        assert list_rounds() == []
+
+
+def test_list_rounds_custom_limit():
+    """Verify that a custom retrieval limit is applied."""
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        cursor = collection.find.return_value.sort.return_value
+        cursor.limit.return_value = []
+
+        assert list_rounds(limit=5) == []
+        cursor.limit.assert_called_once_with(5)
+
+
+def test_list_rounds_database_failure():
+    """Verify that database retrieval errors propagate."""
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.find.side_effect = ConnectionFailure("Database unavailable")
+
+        with pytest.raises(ConnectionFailure):
+            list_rounds()

@@ -46,3 +46,10 @@ def create_round_document(image_data):
 def store_round(document):
     """Insert a pending round into MongoDB."""
     get_collection().insert_one(document)
+
+
+def list_rounds(limit=20):
+    """Retrieve recent game rounds without image data."""
+    return list(
+        get_collection().find({}, {"image": 0}).sort("created_at", -1).limit(limit)
+    )
