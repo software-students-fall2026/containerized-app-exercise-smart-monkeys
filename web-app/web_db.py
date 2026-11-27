@@ -88,3 +88,11 @@ def get_stats():
             stats["total"] += result["count"]
 
     return stats
+
+
+def get_round(round_id):
+    """Retrieve an individual round without its image data."""
+    return get_collection().find_one(
+        {"_id": round_id},
+        {"image": 0},
+    )
