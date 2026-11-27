@@ -14,6 +14,7 @@ from web_db import (
     create_round_document,
     store_round,
     list_rounds,
+    get_stats,
 )
 
 
@@ -136,3 +137,78 @@ def test_list_rounds_database_failure():
 
         with pytest.raises(ConnectionFailure):
             list_rounds()
+
+
+def test_get_stats_success():
+    """Verify statistics for completed rounds."""
+    results = [
+        {"_id": "win", "count": 5},
+        {"_id": "loss", "count": 3},
+        {"_id": "draw", "count": 2},
+    ]
+
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.aggregate.return_value = results
+
+        assert get_stats() == {
+            "wins": 5,
+            "losses": 3,
+            "draws": 2,
+            "total": 10,
+        }
+
+        collection.aggregate.assert_called_once_with(
+            [
+                {"$match": {"status": "completed"}},
+                {
+                    "$group": {
+                        "_id": "$outcome",
+                        "count": {"$sum": 1},
+                    }
+                },
+            ]
+        )
+
+
+def test_get_stats_empty():
+    """Verify statistics when no completed rounds exist."""
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.aggregate.return_value = []
+
+        assert get_stats() == {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "total": 0,
+        }
+
+
+def test_get_stats_unexpected_outcome():
+    """Verify that unexpected outcomes are ignored."""
+    results = [
+        {"_id": "win", "count": 4},
+        {"_id": "unknown", "count": 2},
+    ]
+
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.aggregate.return_value = results
+
+        assert get_stats() == {
+            "wins": 4,
+            "losses": 0,
+            "draws": 0,
+            "total": 4,
+        }
+
+
+def test_get_stats_database_failure():
+    """Verify that aggregation errors propagate."""
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.aggregate.side_effect = ConnectionFailure("Database unavailable")
+
+        with pytest.raises(ConnectionFailure):
+            get_stats()
