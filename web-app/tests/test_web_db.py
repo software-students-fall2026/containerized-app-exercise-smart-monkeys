@@ -5,12 +5,14 @@ from unittest.mock import patch
 from uuid import UUID
 
 from pymongo.errors import ConnectionFailure
+import pytest
 
 from web_db import (
     check_connection,
     get_collection,
     create_round_document,
     store_round,
+    get_round,
 )
 
 
@@ -83,3 +85,49 @@ def test_store_round():
         mock_client.get_default_database.assert_called_once_with()
         database.__getitem__.assert_called_once_with("rounds")
         collection.insert_one.assert_called_once_with(document)
+
+
+def test_get_round_success():
+    """Verify retrieval of an existing round without image data."""
+    document = {
+        "_id": "round-123",
+        "status": "completed",
+        "player_move": "rock",
+        "computer_move": "scissors",
+        "outcome": "win",
+    }
+
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.find_one.return_value = document
+
+        assert get_round("round-123") == document
+
+        collection.find_one.assert_called_once_with(
+            {"_id": "round-123"},
+            {"image": 0},
+        )
+
+
+def test_get_round_not_found():
+    """Verify that a nonexistent round returns None."""
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.find_one.return_value = None
+
+        assert get_round("nonexistent-id") is None
+
+        collection.find_one.assert_called_once_with(
+            {"_id": "nonexistent-id"},
+            {"image": 0},
+        )
+
+
+def test_get_round_database_failure():
+    """Verify that database retrieval errors propagate."""
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.find_one.side_effect = ConnectionFailure("Database unavailable")
+
+        with pytest.raises(ConnectionFailure):
+            get_round("round-123")
