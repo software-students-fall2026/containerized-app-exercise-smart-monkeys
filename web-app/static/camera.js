@@ -90,6 +90,13 @@ async function captureGesture() {
     }
 
     captureButton.disabled = true;
+    submitButton.disabled = true;
+    capturedImageBlob = null;
+    capturedImage.hidden = true;
+    if (capturedImageUrl) {
+        URL.revokeObjectURL(capturedImageUrl);
+        capturedImageUrl = null;
+    }
 
     try {
         // Resize the image while preserving its proportions
@@ -125,10 +132,6 @@ async function captureGesture() {
         // Save the image for later API submission
         capturedImageBlob = imageBlob;
         submitButton.disabled = false;
-
-        if (capturedImageUrl) {
-            URL.revokeObjectURL(capturedImageUrl);
-        }
 
         capturedImageUrl = URL.createObjectURL(imageBlob);
         capturedImage.src = capturedImageUrl;
