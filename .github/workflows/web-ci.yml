@@ -19,6 +19,11 @@ jobs:
       BASE_URL: http://web-app:5000
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Test camera capture state
+        run: node --test web-app/tests/test_camera.mjs
       - name: Build Flask image
         run: docker build --pull -t monkeymoves-web:ci ./web-app
       - name: Run web unit tests and enforce coverage
