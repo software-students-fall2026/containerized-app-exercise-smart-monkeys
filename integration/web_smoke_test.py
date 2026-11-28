@@ -4,6 +4,8 @@ import argparse
 from io import BytesIO
 import json
 import os
+from pathlib import Path
+import time
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from uuid import uuid4
@@ -23,11 +25,12 @@ def request_json(url, data=None, headers=None):
         return response.status, json.load(response)
 
 
-def check_upload(base_url, mongo_uri):
-    """Submit a synthetic JPEG, verify its stored bytes, then remove our record."""
-    image = BytesIO()
-    Image.new("RGB", (16, 16), "blue").save(image, format="JPEG")
-    image_bytes = image.getvalue()
+def check_upload(base_url, mongo_uri, image_bytes=None, expected="pending"):
+    """Verify JPEG storage or real processing, then remove only our test round."""
+    if image_bytes is None:
+        image = BytesIO()
+        Image.new("RGB", (16, 16), "blue").save(image, format="JPEG")
+        image_bytes = image.getvalue()
     boundary = uuid4().hex
     body = (
         (
@@ -42,23 +45,50 @@ def check_upload(base_url, mongo_uri):
     status, result = request_json(f"{base_url}/api/rounds", body, headers)
     assert status == 202, (status, result)
     assert result["status"] == "pending", result
+    round_id = result["id"]
 
     with MongoClient(mongo_uri, serverSelectionTimeoutMS=5000) as client:
         rounds = client.get_default_database()["rounds"]
         try:
-            document = rounds.find_one({"_id": result["id"]})
+            if expected != "pending":
+                deadline = time.monotonic() + 60
+                while time.monotonic() < deadline:
+                    status, result = request_json(f"{base_url}/api/rounds/{round_id}")
+                    assert status == 200, result
+                    if result["status"] not in ("pending", "processing"):
+                        break
+                    time.sleep(1)
+                assert result["status"] == expected, result
+                if expected == "completed":
+                    assert result["player_move"] == "scissors", result
+                    assert 0.70 <= result["confidence"] <= 1, result
+                    assert (
+                        result["outcome"]
+                        == {"rock": "loss", "paper": "win", "scissors": "draw"}[
+                            result["computer_move"]
+                        ]
+                    ), result
+                else:
+                    assert result["error"] and result["outcome"] is None, result
+            document = rounds.find_one({"_id": round_id})
             assert document is not None, "Accepted round was not stored"
-            assert document["status"] == "pending", document["status"]
-            assert document["image"] == image_bytes, "Stored JPEG differs"
+            assert document["status"] == expected, document["status"]
+            if expected == "pending":
+                assert document["image"] == image_bytes, "Stored JPEG differs"
+            else:
+                assert "image" not in document and document["finished_at"] is not None
             assert document["created_at"] is not None
         finally:
-            rounds.delete_one({"_id": result["id"]})
+            rounds.delete_one({"_id": round_id})
 
 
 def main():
     """Check ready/upload behavior, or the health response during a DB outage."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expect-unavailable", action="store_true")
+    parser.add_argument(
+        "--gesture", type=Path, help="Known scissors JPEG for the full stack"
+    )
     args = parser.parse_args()
     base_url = os.environ.get("BASE_URL", "http://127.0.0.1:5000").rstrip("/")
     status, result = request_json(f"{base_url}/health")
@@ -72,8 +102,14 @@ def main():
     assert result == {"status": "ok"}, result
     status, result = request_json(f"{base_url}/api/rounds", data=b"")
     assert status == 400, (status, result)
-    check_upload(base_url, os.environ["MONGO_URI"])
-    print("PASS: health, missing-image rejection and JPEG storage")
+    if args.gesture:
+        check_upload(
+            base_url, os.environ["MONGO_URI"], args.gesture.read_bytes(), "completed"
+        )
+        check_upload(base_url, os.environ["MONGO_URI"], expected="invalid")
+    else:
+        check_upload(base_url, os.environ["MONGO_URI"])
+    print("PASS: health, upload and expected database result")
 
 
 if __name__ == "__main__":
