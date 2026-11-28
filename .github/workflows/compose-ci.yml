@@ -1,4 +1,4 @@
-name: Compose startup check
+name: Compose startup and persistence checks
 on: [push, pull_request]
 permissions:
   contents: read
@@ -17,6 +17,19 @@ jobs:
           docker compose config --quiet
           docker compose up --build --wait --wait-timeout 120
           curl --fail --silent --show-error http://127.0.0.1:18080/health
+      - name: Check persistence script and save a test record
+        run: |
+          docker compose cp integration/check_persistence.py web-app:/tmp/check_persistence.py
+          docker compose exec -T web-app python -m black --check /tmp/check_persistence.py
+          docker compose exec -T web-app python -m pylint --persistent=n /tmp/check_persistence.py
+          docker compose exec -T web-app python /tmp/check_persistence.py write "$GITHUB_RUN_ID"
+      - name: Recreate containers and verify saved data
+        run: |
+          docker compose down
+          docker compose up --wait --wait-timeout 120
+          curl --fail --silent --show-error http://127.0.0.1:18080/health
+          docker compose cp integration/check_persistence.py web-app:/tmp/check_persistence.py
+          docker compose exec -T web-app python /tmp/check_persistence.py verify "$GITHUB_RUN_ID"
       - name: Show failure logs
         if: failure()
         run: docker compose logs --no-color --tail=100

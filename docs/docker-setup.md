@@ -30,7 +30,11 @@ docker compose down
 Check `http://localhost:5000/health` (or your chosen port). MongoDB has no host port.
 `down` preserves data; `down --volumes` deletes it. Keep the same project name to
 reuse the volume. Stop old manual containers first; their volume is not migrated.
-CI validates startup; container recreation/persistence tests will follow separately.
+CI also writes a uniquely identified test record, removes and recreates the containers
+without deleting the volume, then verifies and removes that record. A missing or
+changed record fails the check. This tests volume persistence, not ML processing.
+The final CI cleanup deletes the disposable test volume even after a failure;
+it does not affect your local database.
 
 ## Run containers separately
 
