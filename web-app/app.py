@@ -3,7 +3,7 @@
 import os
 from io import BytesIO
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request
 from PIL import Image, UnidentifiedImageError
 from pymongo.errors import PyMongoError
 
@@ -33,6 +33,12 @@ def is_valid_jpeg(image_data):
         Image.DecompressionBombError,
     ):
         return False
+
+
+@app.route("/", methods=["GET"])
+def index():
+    """Serve the webcam interface."""
+    return render_template("index.html")
 
 
 @app.errorhandler(413)
