@@ -4,8 +4,8 @@ from datetime import timezone
 from unittest.mock import patch
 from uuid import UUID
 
-from pymongo.errors import ConnectionFailure
 import pytest
+from pymongo.errors import ConnectionFailure
 
 from web_db import (
     check_connection,
@@ -13,6 +13,8 @@ from web_db import (
     create_round_document,
     store_round,
     get_round,
+    list_rounds,
+    get_stats,
 )
 
 
@@ -87,6 +89,131 @@ def test_store_round():
         collection.insert_one.assert_called_once_with(document)
 
 
+def test_list_rounds_success():
+    """Verify retrieval of recent rounds."""
+    documents = [
+        {"_id": "round-2", "status": "completed"},
+        {"_id": "round-1", "status": "pending"},
+    ]
+
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        cursor = collection.find.return_value
+        sorted_cursor = cursor.sort.return_value
+        sorted_cursor.limit.return_value = documents
+
+        assert list_rounds() == documents
+
+        collection.find.assert_called_once_with({}, {"image": 0})
+        cursor.sort.assert_called_once_with("created_at", -1)
+        sorted_cursor.limit.assert_called_once_with(20)
+
+
+def test_list_rounds_empty():
+    """Verify retrieval when no rounds exist."""
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.find.return_value.sort.return_value.limit.return_value = []
+
+        assert list_rounds() == []
+
+
+def test_list_rounds_custom_limit():
+    """Verify that a custom retrieval limit is applied."""
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        cursor = collection.find.return_value.sort.return_value
+        cursor.limit.return_value = []
+
+        assert list_rounds(limit=5) == []
+        cursor.limit.assert_called_once_with(5)
+
+
+def test_list_rounds_database_failure():
+    """Verify that database retrieval errors propagate."""
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.find.side_effect = ConnectionFailure("Database unavailable")
+
+        with pytest.raises(ConnectionFailure):
+            list_rounds()
+
+
+def test_get_stats_success():
+    """Verify statistics for completed rounds."""
+    results = [
+        {"_id": "win", "count": 5},
+        {"_id": "loss", "count": 3},
+        {"_id": "draw", "count": 2},
+    ]
+
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.aggregate.return_value = results
+
+        assert get_stats() == {
+            "wins": 5,
+            "losses": 3,
+            "draws": 2,
+            "total": 10,
+        }
+
+        collection.aggregate.assert_called_once_with(
+            [
+                {"$match": {"status": "completed"}},
+                {
+                    "$group": {
+                        "_id": "$outcome",
+                        "count": {"$sum": 1},
+                    }
+                },
+            ]
+        )
+
+
+def test_get_stats_empty():
+    """Verify statistics when no completed rounds exist."""
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.aggregate.return_value = []
+
+        assert get_stats() == {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "total": 0,
+        }
+
+
+def test_get_stats_unexpected_outcome():
+    """Verify that unexpected outcomes are ignored."""
+    results = [
+        {"_id": "win", "count": 4},
+        {"_id": "unknown", "count": 2},
+    ]
+
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.aggregate.return_value = results
+
+        assert get_stats() == {
+            "wins": 4,
+            "losses": 0,
+            "draws": 0,
+            "total": 4,
+        }
+
+
+def test_get_stats_database_failure():
+    """Verify that aggregation errors propagate."""
+    with patch("web_db.get_collection") as mock_get_collection:
+        collection = mock_get_collection.return_value
+        collection.aggregate.side_effect = ConnectionFailure("Database unavailable")
+
+        with pytest.raises(ConnectionFailure):
+            get_stats()
+
+
 def test_get_round_success():
     """Verify retrieval of an existing round without image data."""
     document = {
@@ -131,3 +258,13 @@ def test_get_round_database_failure():
 
         with pytest.raises(ConnectionFailure):
             get_round("round-123")
+
+
+@pytest.mark.parametrize("limit", [0, -1, -20, 2.5, "20", None, True])
+def test_list_rounds_invalid_limit(limit):
+    """Verify that invalid history limits are rejected."""
+    with patch("web_db.get_collection") as mock_get_collection:
+        with pytest.raises(ValueError):
+            list_rounds(limit)
+
+        mock_get_collection.assert_not_called()

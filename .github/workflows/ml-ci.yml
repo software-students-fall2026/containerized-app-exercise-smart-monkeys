@@ -1,0 +1,27 @@
+name: ML build and test
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ml:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build ML test image and download verified model
+        run: docker build --pull -t monkeymoves-ml:test ./machine-learning-client
+      - name: Run ML tests and enforce coverage
+        run: docker run --rm --network none monkeymoves-ml:test
+      - name: Check ML code style
+        run: |
+          docker run --rm monkeymoves-ml:test python -m black --check .
+          docker run --rm monkeymoves-ml:test \
+            python -m pylint --persistent=n --recursive=y .

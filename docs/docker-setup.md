@@ -1,7 +1,7 @@
 # Flask container setup
 
 This step packages the merged Flask backend and checks it against MongoDB.
-The ML worker and full three-service Compose stack will be added separately.
+Compose starts the web and database services; the ML worker will be added later.
 
 ## Image and configuration
 
@@ -15,11 +15,28 @@ The ML worker and full three-service Compose stack will be added separately.
   is reachable and 503 when unavailable. An unhealthy status alone does not
   automatically restart the container.
 - The Flask development server is for the local class demo, not public hosting.
-- The image includes the existing subsystem tests and development dependencies so
-  CI can test the same image. Splitting runtime/dev requirements belongs to the
-  dependency owner and is not required for this step.
+- The image includes tests and development dependencies so CI tests the same image.
 
-## Run locally
+## Start with Compose
+
+With Docker running, copy `.env.example` to `.env` once, keeping existing settings.
+Set `WEB_PORT` if 5000 is busy; `MONGO_DB` sets the database name.
+
+```bash
+docker compose up --build --wait --wait-timeout 120
+docker compose down
+```
+
+Check `http://localhost:5000/health` (or your chosen port). MongoDB has no host port.
+`down` preserves data; `down --volumes` deletes it. Keep the same project name to
+reuse the volume. Stop old manual containers first; their volume is not migrated.
+CI also writes a uniquely identified test record, removes and recreates the containers
+without deleting the volume, then verifies and removes that record. A missing or
+changed record fails the check. This tests volume persistence, not ML processing.
+The final CI cleanup deletes the disposable test volume even after a failure;
+it does not affect your local database.
+
+## Run containers separately
 
 Install/start a Docker engine first. From the repository root:
 
@@ -40,9 +57,7 @@ Wait for `docker ps` to show the web container as healthy, then check
 retains its data when the containers are removed. If localhost port 5000 is busy,
 change only the host port in the mapping (for example `127.0.0.1:5001:5000`).
 
-Current backend routes are `/health` and `POST /api/rounds`. The root page,
-result/history endpoints and ML processing are separate teammates' work; this
-container PR does not claim a playable game yet.
+This setup currently supports `/health` and `POST /api/rounds`.
 
 View logs with `docker logs monkeymoves-web-dev`. To stop and remove these two
 containers and their network, preserving the database volume:
@@ -79,17 +94,3 @@ docker run --rm -e COVERAGE_FILE=/tmp/.coverage monkeymoves-web:dev \
 
 A green hosted web CI run and teammate review are required before merging.
 Local Python tests alone do not establish that a Docker image builds and runs.
-
-## Local verification (November 26, 2026)
-
-- Python 3.12.16: all 16 existing web unit tests passed; application/database
-  coverage was 95.52%, above the 80% gate.
-- A temporary native MongoDB 8.0.16 and the real Flask CLI server passed the
-  live smoke test: healthy response, rejected missing upload, accepted JPEG,
-  matching stored bytes and removal of the smoke test's own record.
-- Stopping that MongoDB process produced the expected HTTP 503 response.
-- Black, Pylint (10/10), Actionlint and whitespace checks passed for the changes.
-  Actionlint ran without the optional external ShellCheck tool.
-- The official Python and MongoDB image tags were verified to provide Linux
-  amd64 and arm64 manifests. No image was built locally: this machine has no
-  working Docker engine. The PR's web workflow must pass before merging.

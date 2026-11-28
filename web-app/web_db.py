@@ -48,6 +48,51 @@ def store_round(document):
     get_collection().insert_one(document)
 
 
+def list_rounds(limit=20):
+    """Retrieve recent game rounds without image data."""
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+        raise ValueError("Limit must be a positive integer")
+
+    return list(
+        get_collection().find({}, {"image": 0}).sort("created_at", -1).limit(limit)
+    )
+
+
+def get_stats():
+    """Calculate statistics for completed game rounds."""
+    pipeline = [
+        {"$match": {"status": "completed"}},
+        {
+            "$group": {
+                "_id": "$outcome",
+                "count": {"$sum": 1},
+            }
+        },
+    ]
+
+    stats = {
+        "wins": 0,
+        "losses": 0,
+        "draws": 0,
+        "total": 0,
+    }
+
+    outcome_keys = {
+        "win": "wins",
+        "loss": "losses",
+        "draw": "draws",
+    }
+
+    for result in get_collection().aggregate(pipeline):
+        key = outcome_keys.get(result["_id"])
+
+        if key is not None:
+            stats[key] = result["count"]
+            stats["total"] += result["count"]
+
+    return stats
+
+
 def get_round(round_id):
     """Retrieve an individual round without its image data."""
     return get_collection().find_one(
