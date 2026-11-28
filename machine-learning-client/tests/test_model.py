@@ -50,122 +50,80 @@ def test_create_recognizer():
 
 
 @pytest.mark.parametrize(
-    "category, expected_move",
+    "category, confidence, expected_move",
     [
-        ("Closed_Fist", "rock"),
-        ("Open_Palm", "paper"),
-        ("Victory", "scissors"),
+        ("Closed_Fist", 0.95, "rock"),
+        ("Open_Palm", 0.95, "paper"),
+        ("Victory", 0.95, "scissors"),
+        ("Thumb_Up", 0.95, None),
+        ("Victory", 0.40, None),
+        ("Closed_Fist", 0.70, "rock"),
+    ],
+    ids=[
+        "rock",
+        "paper",
+        "scissors",
+        "unsupported",
+        "low-confidence",
+        "confidence-boundary",
     ],
 )
-def test_valid_gestures(category, expected_move):
-    """Verify that supported gestures map to the correct moves."""
-    recognizer = make_recognizer([[make_category(category, 0.95)]])
-
-    result = recognize_gesture(make_image_bytes(), recognizer)
-
-    assert result["move"] == expected_move
-    assert result["confidence"] == 0.95
-
-
-def test_unsupported_gesture():
-    """Verify that unsupported gestures are rejected."""
-    recognizer = make_recognizer([[make_category("Thumb_Up", 0.95)]])
-
-    result = recognize_gesture(make_image_bytes(), recognizer)
-
-    assert result["move"] is None
-    assert result["confidence"] == 0.95
-
-
-def test_low_confidence():
-    """Verify that low-confidence predictions are rejected."""
-    recognizer = make_recognizer([[make_category("Victory", 0.40)]])
-
-    result = recognize_gesture(make_image_bytes(), recognizer)
-
-    assert result["move"] is None
-    assert result["confidence"] == 0.40
-
-
-def test_confidence_boundary():
-    """Verify that a prediction at the threshold is accepted."""
-    recognizer = make_recognizer([[make_category("Closed_Fist", 0.70)]])
-
-    result = recognize_gesture(make_image_bytes(), recognizer)
-
-    assert result["move"] == "rock"
-
-
-def test_no_hand():
-    """Verify that images without detected hands are rejected."""
-    recognizer = make_recognizer([], hand_count=0)
+def test_gesture_mapping(category, confidence, expected_move):
+    """Verify gesture mapping and confidence filtering."""
+    recognizer = make_recognizer([[make_category(category, confidence)]])
 
     result = recognize_gesture(make_image_bytes(), recognizer)
 
     assert result == {
+        "move": expected_move,
+        "confidence": confidence,
+    }
+
+
+@pytest.mark.parametrize(
+    "gestures, hand_count",
+    [
+        ([], 0),
+        (
+            [
+                [make_category("Closed_Fist", 0.95)],
+                [make_category("Victory", 0.92)],
+            ],
+            2,
+        ),
+        ([], 1),
+        ([[]], 1),
+    ],
+    ids=[
+        "no-hand",
+        "multiple-hands",
+        "missing-gestures",
+        "empty-categories",
+    ],
+)
+def test_invalid_hand_detection(gestures, hand_count):
+    """Verify that unusable hand detections are rejected."""
+    recognizer = make_recognizer(gestures, hand_count)
+
+    assert recognize_gesture(make_image_bytes(), recognizer) == {
         "move": None,
         "confidence": None,
     }
 
 
-def test_multiple_hands():
-    """Verify that images with multiple detected hands are rejected."""
-    recognizer = make_recognizer(
-        [
-            [make_category("Closed_Fist", 0.95)],
-            [make_category("Victory", 0.92)],
-        ],
-        hand_count=2,
-    )
+@pytest.mark.parametrize(
+    "image_bytes",
+    [b"invalid image data", make_image_bytes("PNG")],
+    ids=["corrupted-image", "unsupported-format"],
+)
+def test_invalid_image(image_bytes):
+    """Verify that invalid images are rejected before inference."""
+    recognizer = Mock()
 
-    result = recognize_gesture(make_image_bytes(), recognizer)
-
-    assert result == {
+    assert recognize_gesture(image_bytes, recognizer) == {
         "move": None,
         "confidence": None,
     }
-
-
-def test_missing_gestures():
-    """Verify that missing gesture predictions are handled."""
-    recognizer = make_recognizer([], hand_count=1)
-
-    result = recognize_gesture(make_image_bytes(), recognizer)
-
-    assert result["move"] is None
-    assert result["confidence"] is None
-
-
-def test_empty_gesture_categories():
-    """Verify that empty gesture categories are handled."""
-    recognizer = make_recognizer([[]])
-
-    result = recognize_gesture(make_image_bytes(), recognizer)
-
-    assert result["move"] is None
-    assert result["confidence"] is None
-
-
-def test_invalid_image():
-    """Verify that corrupted image data is rejected."""
-    recognizer = Mock()
-
-    result = recognize_gesture(b"invalid image data", recognizer)
-
-    assert result["move"] is None
-    assert result["confidence"] is None
-
-    recognizer.recognize.assert_not_called()
-
-
-def test_non_jpeg_image():
-    """Verify that unsupported image formats are rejected."""
-    recognizer = Mock()
-
-    result = recognize_gesture(make_image_bytes("PNG"), recognizer)
-
-    assert result["move"] is None
-    assert result["confidence"] is None
 
     recognizer.recognize.assert_not_called()
 
