@@ -12,6 +12,8 @@ from web_db import (
     check_connection,
     create_round_document,
     get_round,
+    get_stats,
+    list_rounds,
     store_round,
 )
 
@@ -123,6 +125,31 @@ def retrieve_round(round_id):
         return jsonify({"error": "Round not found"}), 404
 
     return jsonify(serialize_round(document)), 200
+
+
+@app.route("/api/rounds", methods=["GET"])
+def retrieve_round_history():
+    """Retrieve the 20 most recent game rounds."""
+    try:
+        documents = list_rounds(limit=20)
+    except PyMongoError:
+        return jsonify({"error": "Database unavailable"}), 503
+
+    return (
+        jsonify({"rounds": [serialize_round(document) for document in documents]}),
+        200,
+    )
+
+
+@app.route("/api/stats", methods=["GET"])
+def retrieve_stats():
+    """Retrieve statistics for completed game rounds."""
+    try:
+        stats = get_stats()
+    except PyMongoError:
+        return jsonify({"error": "Database unavailable"}), 503
+
+    return jsonify(stats), 200
 
 
 if __name__ == "__main__":
