@@ -30,7 +30,10 @@ docker compose down
 Check `http://localhost:5000/health` (or your chosen port). MongoDB has no host port.
 `down` preserves data; `down --volumes` deletes it. Keep the same project name to
 reuse the volume. Stop old manual containers first; their volume is not migrated.
-CI validates startup; container recreation/persistence tests will follow separately.
+Compose CI also submits a generated JPEG over HTTP and checks the exact stored
+bytes in MongoDB, using `integration/web_smoke_test.py`. The check removes its
+own test round. This verifies Flask-to-database integration; the worker and
+result APIs must be merged before full game integration can be tested.
 
 ## Run containers separately
 

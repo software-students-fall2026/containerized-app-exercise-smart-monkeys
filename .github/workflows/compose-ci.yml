@@ -17,6 +17,10 @@ jobs:
           docker compose config --quiet
           docker compose up --build --wait --wait-timeout 120
           curl --fail --silent --show-error http://127.0.0.1:18080/health
+      - name: Verify HTTP upload reaches MongoDB
+        run: |
+          docker compose cp integration/web_smoke_test.py web-app:/tmp/web_smoke_test.py
+          docker compose exec -T web-app python /tmp/web_smoke_test.py
       - name: Show failure logs
         if: failure()
         run: docker compose logs --no-color --tail=100
