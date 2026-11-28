@@ -10,9 +10,11 @@ WINNING_MOVES = {
     "scissors": "paper",
 }
 
+
 def choose_computer_move():
     """Randomly select a valid move for the computer."""
     return random.choice(MOVES)
+
 
 def determine_winner(player_move, computer_move):
     """Determine the round outcome from the player's perspective."""
