@@ -19,7 +19,9 @@ jobs:
       - name: Build ML test image and download verified model
         run: docker build --pull -t monkeymoves-ml:test ./machine-learning-client
       - name: Run ML tests and enforce coverage
-        run: docker run --rm --network none monkeymoves-ml:test
+        run: |
+          docker run --rm --network none monkeymoves-ml:test python -m pytest \
+            -p no:cacheprovider --cov=. --cov-report=term-missing --cov-fail-under=80
       - name: Check ML code style
         run: |
           docker run --rm monkeymoves-ml:test python -m black --check .
