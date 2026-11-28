@@ -7,12 +7,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libegl1 libgl1 libglib2.0-0 \
+    && apt-get install -y --no-install-recommends libegl1 libgl1 libgles2 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.txt \
-    && python -m pip check
+    && python -m pip check \
+    && python -c "import ctypes; ctypes.CDLL('libGLESv2.so.2')"
 
 COPY download_model.py ./
 RUN python download_model.py
