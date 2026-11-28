@@ -1,0 +1,48 @@
+name: Compose foundation checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      COMPOSE_PROJECT_NAME: monkeymoves-ci-${{ github.run_id }}
+      WEB_PORT: "18080"
+      MONGO_DB: monkeymoves_compose_ci
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate and start Compose services
+        run: |
+          docker compose config --quiet
+          docker compose up --build --wait --wait-timeout 120
+          curl --fail --silent --show-error http://127.0.0.1:18080/health
+      - name: Check scripts and live upload
+        run: |
+          docker compose cp integration/. web-app:/tmp/checks
+          docker compose exec -T web-app python -m black --check /tmp/checks/check_persistence.py
+          docker compose exec -T web-app python -m pylint --persistent=n /tmp/checks/check_persistence.py
+          docker compose exec -T web-app python /tmp/checks/web_smoke_test.py
+      - name: Verify data survives container recreation
+        run: |
+          docker compose exec -T web-app python /tmp/checks/check_persistence.py write "$GITHUB_RUN_ID"
+          docker compose down
+          docker compose up --wait --wait-timeout 120
+          docker compose cp integration/. web-app:/tmp/checks
+          docker compose exec -T web-app python /tmp/checks/check_persistence.py verify "$GITHUB_RUN_ID"
+      - name: Show service diagnostics
+        if: failure()
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color --tail=100
+      - name: Remove disposable CI resources
+        if: always()
+        run: docker compose down --volumes --remove-orphans
