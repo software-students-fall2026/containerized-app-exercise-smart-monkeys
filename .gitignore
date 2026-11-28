@@ -147,3 +147,6 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Downloaded by machine-learning-client/download_model.py
+machine-learning-client/models/gesture_recognizer.task
