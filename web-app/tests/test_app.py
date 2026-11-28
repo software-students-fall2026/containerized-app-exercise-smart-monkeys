@@ -178,11 +178,11 @@ def test_retrieve_round_completed():
     timestamp = datetime(2026, 11, 27, 12, 0, tzinfo=timezone.utc)
 
     document = {
-        "_id": "round-123",
+        "_id": "completed-round",
         "status": "completed",
-        "player_move": "rock",
-        "computer_move": "scissors",
-        "confidence": 0.98,
+        "player_move": "paper",
+        "computer_move": "rock",
+        "confidence": 0.95,
         "outcome": "win",
         "error": None,
         "created_at": timestamp,
@@ -191,22 +191,22 @@ def test_retrieve_round_completed():
 
     with patch("app.get_round", return_value=document) as mock_get:
         with app.test_client() as client:
-            response = client.get("/api/rounds/round-123")
+            response = client.get("/api/rounds/completed-round")
 
         assert response.status_code == 200
         assert response.get_json() == {
-            "id": "round-123",
+            "id": "completed-round",
             "status": "completed",
-            "player_move": "rock",
-            "computer_move": "scissors",
-            "confidence": 0.98,
+            "player_move": "paper",
+            "computer_move": "rock",
+            "confidence": 0.95,
             "outcome": "win",
             "error": None,
             "created_at": "2026-11-27T12:00:00+00:00",
             "finished_at": "2026-11-27T12:00:00+00:00",
         }
 
-        mock_get.assert_called_once_with("round-123")
+        mock_get.assert_called_once_with("completed-round")
 
 
 def test_retrieve_round_pending():
