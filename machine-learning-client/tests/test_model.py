@@ -50,50 +50,34 @@ def test_create_recognizer():
 
 
 @pytest.mark.parametrize(
-    "category, expected_move",
+    "category, confidence, expected_move",
     [
-        ("Closed_Fist", "rock"),
-        ("Open_Palm", "paper"),
-        ("Victory", "scissors"),
+        ("Closed_Fist", 0.95, "rock"),
+        ("Open_Palm", 0.95, "paper"),
+        ("Victory", 0.95, "scissors"),
+        ("Thumb_Up", 0.95, None),
+        ("Victory", 0.40, None),
+        ("Closed_Fist", 0.70, "rock"),
+    ],
+    ids=[
+        "rock",
+        "paper",
+        "scissors",
+        "unsupported",
+        "low-confidence",
+        "confidence-boundary",
     ],
 )
-def test_valid_gestures(category, expected_move):
-    """Verify that supported gestures map to the correct moves."""
-    recognizer = make_recognizer([[make_category(category, 0.95)]])
+def test_gesture_mapping(category, confidence, expected_move):
+    """Verify gesture mapping and confidence filtering."""
+    recognizer = make_recognizer([[make_category(category, confidence)]])
 
     result = recognize_gesture(make_image_bytes(), recognizer)
 
-    assert result["move"] == expected_move
-    assert result["confidence"] == 0.95
-
-
-def test_unsupported_gesture():
-    """Verify that unsupported gestures are rejected."""
-    recognizer = make_recognizer([[make_category("Thumb_Up", 0.95)]])
-
-    result = recognize_gesture(make_image_bytes(), recognizer)
-
-    assert result["move"] is None
-    assert result["confidence"] == 0.95
-
-
-def test_low_confidence():
-    """Verify that low-confidence predictions are rejected."""
-    recognizer = make_recognizer([[make_category("Victory", 0.40)]])
-
-    result = recognize_gesture(make_image_bytes(), recognizer)
-
-    assert result["move"] is None
-    assert result["confidence"] == 0.40
-
-
-def test_confidence_boundary():
-    """Verify that a prediction at the threshold is accepted."""
-    recognizer = make_recognizer([[make_category("Closed_Fist", 0.70)]])
-
-    result = recognize_gesture(make_image_bytes(), recognizer)
-
-    assert result["move"] == "rock"
+    assert result == {
+        "move": expected_move,
+        "confidence": confidence,
+    }
 
 
 def test_no_hand():
