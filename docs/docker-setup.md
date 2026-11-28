@@ -1,7 +1,7 @@
 # Flask container setup
 
 This step packages the merged Flask backend and checks it against MongoDB.
-The ML worker and full three-service Compose stack will be added separately.
+Compose starts the web and database services; the ML worker will be added later.
 
 ## Image and configuration
 
@@ -17,7 +17,22 @@ The ML worker and full three-service Compose stack will be added separately.
 - The Flask development server is for the local class demo, not public hosting.
 - The image includes tests and development dependencies so CI tests the same image.
 
-## Run locally
+## Start with Compose
+
+With Docker running, copy `.env.example` to `.env` once, keeping existing settings.
+Set `WEB_PORT` if 5000 is busy; `MONGO_DB` sets the database name.
+
+```bash
+docker compose up --build --wait --wait-timeout 120
+docker compose down
+```
+
+Check `http://localhost:5000/health` (or your chosen port). MongoDB has no host port.
+`down` preserves data; `down --volumes` deletes it. Keep the same project name to
+reuse the volume. Stop old manual containers first; their volume is not migrated.
+CI validates startup; container recreation/persistence tests will follow separately.
+
+## Run containers separately
 
 Install/start a Docker engine first. From the repository root:
 
