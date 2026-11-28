@@ -167,18 +167,19 @@ def test_unsuccessful_round_update(finish_round, status, error):
 
         assert finish_round("round-1", error) is True
 
+        expected_fields = dict.fromkeys(
+            ("player_move", "computer_move", "confidence", "outcome")
+        )
+        expected_fields.update(
+            status=status,
+            error=error,
+            finished_at=finished_at,
+        )
+
         collection.update_one.assert_called_once_with(
             {"_id": "round-1", "status": "processing"},
             {
-                "$set": {
-                    "status": status,
-                    "player_move": None,
-                    "computer_move": None,
-                    "confidence": None,
-                    "outcome": None,
-                    "error": error,
-                    "finished_at": finished_at,
-                },
+                "$set": expected_fields,
                 "$unset": {"image": ""},
             },
         )
