@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from game import MOVES, choose_computer_move, determine_winner
+from game import MOVES, choose_computer_move
 
 
 def test_valid_moves():
@@ -24,23 +24,3 @@ def test_generated_moves_are_valid():
     """Verify that randomly generated moves are always valid."""
     for _ in range(100):
         assert choose_computer_move() in MOVES
-
-
-@pytest.mark.parametrize(
-    "player,outcomes",
-    [
-        ("rock", ("draw", "loss", "win")),
-        ("paper", ("win", "draw", "loss")),
-        ("scissors", ("loss", "win", "draw")),
-    ],
-)
-def test_winner(player, outcomes):
-    """Cover all nine pairings in MOVES order, from the player's perspective."""
-    assert tuple(determine_winner(player, computer) for computer in MOVES) == outcomes
-
-
-@pytest.mark.parametrize("player,computer", [("invalid", "rock"), ("rock", None)])
-def test_invalid_moves(player, computer):
-    """Reject invalid moves on either side."""
-    with pytest.raises(ValueError):
-        determine_winner(player, computer)

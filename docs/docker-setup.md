@@ -1,7 +1,7 @@
 # Flask container setup
 
 This step packages the merged Flask backend and checks it against MongoDB.
-Compose starts web, database and ML services. The ML image runs `python -m pipeline`.
+Compose starts the web and database services; the ML worker will be added later.
 
 ## Image and configuration
 
@@ -23,7 +23,7 @@ With Docker running, copy `.env.example` to `.env` once, keeping existing settin
 Set `WEB_PORT` if 5000 is busy; `MONGO_DB` sets the database name.
 
 ```bash
-docker compose up --build --wait --wait-timeout 180
+docker compose up --build --wait --wait-timeout 120
 docker compose down
 ```
 
@@ -32,7 +32,7 @@ Check `http://localhost:5000/health` (or your chosen port). MongoDB has no host 
 reuse the volume. Stop old manual containers first; their volume is not migrated.
 CI also writes a uniquely identified test record, removes and recreates the containers
 without deleting the volume, then verifies and removes that record. A missing or
-changed record fails the check. CI also verifies real recognition before/after recreation.
+changed record fails the check. This tests volume persistence, not ML processing.
 The final CI cleanup deletes the disposable test volume even after a failure;
 it does not affect your local database.
 
@@ -95,9 +95,9 @@ docker run --rm -e COVERAGE_FILE=/tmp/.coverage monkeymoves-web:dev \
 A green hosted web CI run and teammate review are required before merging.
 Local Python tests alone do not establish that a Docker image builds and runs.
 
-Full-stack CI uses `web_smoke_test.py --gesture /tmp/victory.jpg` with the worker
-running; the verified sample and commands are in `.github/workflows/compose-ci.yml`.
-It checks real recognition and invalid input, then removes only its own rounds.
-UI and history/statistics remain with their owners. For interrupted `processing`
-rounds, stop the worker, reset only affected rounds with images to `pending`, then
-restart. Automatic lease recovery is not implemented.
+The optional `web_smoke_test.py --gesture /path/to/victory.jpg` check is prepared
+for the full stack: it verifies a known scissors JPEG, result polling and rejection
+of a generated blank image. It requires a working ML worker and removes only its
+own test rounds. The worker entry point and game rules are owned by Biniam/Rayyan;
+connect their implementation before enabling this check in Compose CI. The current
+Compose workflow still tests only Flask/MongoDB startup and volume persistence.

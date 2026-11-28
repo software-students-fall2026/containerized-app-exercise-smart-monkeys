@@ -22,7 +22,4 @@ COPY . .
 
 USER 10001:10001
 
-HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=3 \
-    CMD python -c "from ml_db import check_connection; raise SystemExit(not check_connection())"
-
-CMD ["python", "-m", "pipeline"]
+CMD ["python", "-m", "pytest", "-p", "no:cacheprovider", "--cov=.", "--cov-report=term-missing", "--cov-fail-under=80"]
