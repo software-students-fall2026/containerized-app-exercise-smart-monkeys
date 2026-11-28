@@ -170,3 +170,16 @@ def test_submit_round_oversized_request():
 
         assert response.status_code == 413
         assert response.get_json() == {"error": "Request exceeds upload limit"}
+
+
+def test_homepage_and_assets():
+    """Serve the camera page and its assets even when the database is offline."""
+    with patch("app.check_connection", return_value=False):
+        with app.test_client() as client:
+            response = client.get("/")
+            assert response.status_code == 200
+            assert response.mimetype == "text/html"
+            assert b'id="webcam"' in response.data
+            for path in ("/static/camera.js", "/static/style.css"):
+                assert path.encode() in response.data
+                assert client.get(path).status_code == 200
