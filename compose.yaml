@@ -12,6 +12,17 @@ services:
     init: true
     restart: unless-stopped
 
+  machine-learning-client:
+    build:
+      context: ./machine-learning-client
+    environment:
+      MONGO_URI: mongodb://db:27017/${MONGO_DB:-monkeymoves}
+    depends_on:
+      db:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+
   db:
     image: mongo:8.0.16
     volumes:
