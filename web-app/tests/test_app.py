@@ -277,3 +277,122 @@ def test_retrieve_round_database_failure():
         assert response.get_json() == {"error": "Database unavailable"}
 
         mock_get.assert_called_once_with("round-123")
+
+
+def test_round_history_success():
+    """Verify retrieval of recent game rounds."""
+    timestamp = datetime(2026, 11, 28, 10, 0, tzinfo=timezone.utc)
+
+    documents = [
+        {
+            "_id": "history-new",
+            "status": "pending",
+            "created_at": timestamp,
+        },
+        {
+            "_id": "history-old",
+            "status": "completed",
+            "outcome": "draw",
+        },
+    ]
+
+    with patch("app.list_rounds", return_value=documents) as mock_list:
+        with app.test_client() as client:
+            response = client.get("/api/rounds")
+
+        assert response.status_code == 200
+
+        rounds = response.get_json()["rounds"]
+
+        assert len(rounds) == 2
+        assert rounds[0]["id"] == "history-new"
+        assert rounds[0]["status"] == "pending"
+        assert rounds[0]["created_at"] == "2026-11-28T10:00:00+00:00"
+        assert rounds[1]["id"] == "history-old"
+        assert rounds[1]["outcome"] == "draw"
+
+        mock_list.assert_called_once_with(limit=20)
+
+
+def test_round_history_empty():
+    """Verify an empty history returns an empty list."""
+    with patch("app.list_rounds", return_value=[]):
+        with app.test_client() as client:
+            response = client.get("/api/rounds")
+
+        assert response.status_code == 200
+        assert response.get_json() == {"rounds": []}
+
+
+def test_round_history_excludes_image():
+    """Verify history does not expose stored image data."""
+    documents = [
+        {
+            "_id": "private-history-round",
+            "status": "processing",
+            "image": b"private-image-data",
+        }
+    ]
+
+    with patch("app.list_rounds", return_value=documents):
+        with app.test_client() as client:
+            response = client.get("/api/rounds")
+
+        assert response.status_code == 200
+
+        result = response.get_json()["rounds"][0]
+
+        assert "image" not in result
+        assert "_id" not in result
+        assert result["id"] == "private-history-round"
+
+
+def test_round_history_database_failure():
+    """Verify history handles database connection failures."""
+    with patch("app.list_rounds", side_effect=ConnectionFailure):
+        with app.test_client() as client:
+            response = client.get("/api/rounds")
+
+        assert response.status_code == 503
+        assert response.get_json() == {"error": "Database unavailable"}
+
+
+def test_stats_success():
+    """Verify retrieval of completed game statistics."""
+    statistics = {
+        "wins": 7,
+        "losses": 4,
+        "draws": 3,
+        "total": 14,
+    }
+
+    with patch("app.get_stats", return_value=statistics) as mock_stats:
+        with app.test_client() as client:
+            response = client.get("/api/stats")
+
+        assert response.status_code == 200
+        assert response.get_json() == statistics
+
+        mock_stats.assert_called_once_with()
+
+
+def test_stats_empty():
+    """Verify statistics when no games have been completed."""
+    statistics = dict.fromkeys(("wins", "losses", "draws", "total"), 0)
+
+    with patch("app.get_stats", return_value=statistics):
+        with app.test_client() as client:
+            response = client.get("/api/stats")
+
+        assert response.status_code == 200
+        assert response.get_json() == statistics
+
+
+def test_stats_database_failure():
+    """Verify statistics handle database connection failures."""
+    with patch("app.get_stats", side_effect=ConnectionFailure):
+        with app.test_client() as client:
+            response = client.get("/api/stats")
+
+        assert response.status_code == 503
+        assert response.get_json() == {"error": "Database unavailable"}
