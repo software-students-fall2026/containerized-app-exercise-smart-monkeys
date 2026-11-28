@@ -9,7 +9,8 @@ installed dependency consistency, then runs Pylint and Black. The requirements
 file must include both lint tools along with the subsystem dependencies. The
 subsystem owner maintains the versions; the workflow does not install a separate,
 potentially conflicting set of ML or web dependencies. Pipenv is no longer used
-by this workflow. Existing starter Pipfiles are left unchanged.
+by this workflow. The ML starter Pipfiles have been removed; the separate course
+event logger retains its own Pipenv configuration.
 
 A subsystem with no Python files is explicitly reported as empty and skips the
 checks until its code arrives. Once Python files exist, a missing requirements
@@ -34,11 +35,10 @@ Do not interpret an empty-subsystem skip as passing application validation.
 
 ## Scope
 
-This change completes the lint migration only. Separate subsystem test/build
-workflows, the independent 80% coverage gates, Docker runtime checks and the
-end-to-end smoke test are still planned work. ML compatibility with Python 3.12
-must be verified using the actual dependencies and model, not inferred from a
-successful installation on a teammate's Python 3.13 machine.
+This workflow handles lint only. The separate `web-ci.yml` and `ml-ci.yml`
+workflows build their subsystem images and enforce independent 80% coverage
+gates. The ML workflow also loads the actual downloaded model. Full worker
+runtime and three-service Compose integration remain separate tasks.
 
 ## Validation of this change
 
